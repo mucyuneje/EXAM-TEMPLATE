@@ -1,18 +1,15 @@
-const jwt = require('jsonwebtoken')
-const cfg = require('../config/config')
-const User = require('../models/User')
+import jwt from 'jsonwebtoken'
+import cfg from '../config/config.js'
+import User from '../models/User.js'
 
-async function protect(req, res, next) {
+export async function protect(req, res, next) {
   let token
-
   if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
     token = req.headers.authorization.split(' ')[1]
   }
-
   if (!token) {
     return res.status(401).json({ message: 'Not authorized, no token' })
   }
-
   try {
     const decoded = jwt.verify(token, cfg.jwtSecret)
     req.user = await User.findById(decoded.id)
@@ -24,5 +21,3 @@ async function protect(req, res, next) {
     return res.status(401).json({ message: 'Not authorized, invalid token' })
   }
 }
-
-module.exports = { protect }

@@ -1,7 +1,8 @@
 {
-  "name": "hms-backend",
+  "name": "crpms-backend",
   "version": "1.0.0",
-  "description": "Hotel Management System — Backend API",
+  "description": "Car Repair Payment Management System — Backend API",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

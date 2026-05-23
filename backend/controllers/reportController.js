@@ -1,302 +1,151 @@
-const Booking = require('../models/Booking')
-const Guest = require('../models/Guest')
-const Room = require('../models/Room')
-const Payment = require('../models/Payment')
-const { generateInvoicePDF, generateReportPDF } = require('../utils/pdfGenerator')
-const { generateReportXLSX } = require('../utils/xlsxGenerator')
+import ServicePackage from '../models/ServicePackage.js'
+import Car from '../models/Car.js'
+import Package from '../models/Package.js'
+import Payment from '../models/Payment.js'
+import { generateInvoicePDF, generateReportPDF } from '../utils/pdfGenerator.js'
+import { generateReportXLSX } from '../utils/xlsxGenerator.js'
 
-// ── Room Occupancy Report ─────────────────────────────────
-exports.roomOccupancy = async (req, res) => {
-  try {
-    const { date, format } = req.query
-    const targetDate = date ? new Date(date) : new Date()
-
-    const rooms = await Room.find().sort({ roomNumber: 1 })
-
-    const rows = await Promise.all(rooms.map(async (room) => {
-      const activeBooking = await Booking.findOne({
-        roomId: room._id,
-        status: { $in: ['Checked-in', 'Confirmed'] },
-        checkInDate: { $lte: targetDate },
-        checkOutDate: { $gte: targetDate },
-      }).populate('guestId', 'fullName')
-
-      return [
-        room.roomNumber,
-        room.roomType,
-        room.pricePerNight,
-        activeBooking ? 'Booked' : room.status,
-        activeBooking?.guestId?.fullName || '',
-        activeBooking ? new Date(activeBooking.checkInDate).toLocaleDateString('en-GB') : '',
-        activeBooking ? new Date(activeBooking.checkOutDate).toLocaleDateString('en-GB') : '',
-      ]
-    }))
-
-    const columns = ['Room No.', 'Type', 'Price/Night', 'Status', 'Guest', 'Check-in', 'Check-out']
-
-    if (format === 'xlsx') {
-      const buffer = await generateReportXLSX('Room Occupancy Report', columns, rows)
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      res.setHeader('Content-Disposition', 'attachment; filename=room-occupancy.xlsx')
-      return res.send(buffer)
-    }
-
-    if (format === 'pdf') {
-      const buffer = await generateReportPDF('Room Occupancy Report', columns, rows, null, req.user)
-      res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', 'attachment; filename=room-occupancy.pdf')
-      return res.send(buffer)
-    }
-
-    res.json({ data: rows.map((r, i) => ({
-      roomNumber: r[0], roomType: r[1], pricePerNight: r[2],
-      status: r[3], guest: r[4], checkIn: r[5], checkOut: r[6],
-    })) })
-  } catch (err) { res.status(500).json({ message: err.message }) }
-}
-
-// ── Guest List Report ─────────────────────────────────────
-exports.guestList = async (req, res) => {
+// ── Car Wash Records Report ────────────────────────────
+export const serviceRecords = async (req, res) => {
   try {
     const { format } = req.query
-    const guests = await Guest.find().sort({ createdAt: -1 })
+    const records = await ServicePackage.find()
+      .populate('carId', 'plateNumber carType driverName')
+      .populate('packageId', 'packageName packagePrice')
+      .sort({ serviceDate: -1 })
 
-    const rows = await Promise.all(guests.map(async (g) => {
-      const bookings = await Booking.find({ guestId: g._id })
-      const totalSpent = await Payment.aggregate([
-        { $lookup: { from: 'bookings', localField: 'bookingId', foreignField: '_id', as: 'booking' } },
-        { $unwind: '$booking' },
-        { $match: { 'booking.guestId': g._id } },
-        { $group: { _id: null, total: { $sum: '$amountPaid' } } },
-      ])
-      return [
-        g.fullName, g.phone, g.email, g.idNumber,
-        bookings.length, totalSpent[0]?.total || 0,
-      ]
-    }))
-
-    const columns = ['Full Name', 'Phone', 'Email', 'ID No.', 'Bookings', 'Total Spent']
+    const rows = records.map((r) => [
+      r.recordNumber, r.carId?.plateNumber || '', r.carId?.carType || '',
+      r.carId?.driverName || '', r.packageId?.packageName || '', r.packageId?.packagePrice || 0,
+      new Date(r.serviceDate).toLocaleDateString('en-GB'),
+    ])
+    const columns = ['Record No.', 'Plate', 'Car Type', 'Driver', 'Package', 'Price', 'Date']
 
     if (format === 'xlsx') {
-      const buffer = await generateReportXLSX('Guest List Report', columns, rows)
+      const buffer = await generateReportXLSX('Car Wash Records', columns, rows)
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      res.setHeader('Content-Disposition', 'attachment; filename=guest-list.xlsx')
+      res.setHeader('Content-Disposition', 'attachment; filename=car-wash-records.xlsx')
       return res.send(buffer)
     }
-
     if (format === 'pdf') {
-      const totals = [{ label: 'Total Guests', value: guests.length }]
-      const buffer = await generateReportPDF('Guest List Report', columns, rows, totals, req.user)
+      const buffer = await generateReportPDF('Car Wash Records', columns, rows, null, req.user)
       res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', 'attachment; filename=guest-list.pdf')
+      res.setHeader('Content-Disposition', 'attachment; filename=car-wash-records.pdf')
       return res.send(buffer)
     }
 
     res.json({ data: rows.map((r) => ({
-      fullName: r[0], phone: r[1], email: r[2], idNumber: r[3],
-      bookings: r[4], totalSpent: r[5],
+      recordNumber: r[0], plateNumber: r[1], carType: r[2],
+      driverName: r[3], packageName: r[4], price: r[5], serviceDate: r[6],
     })) })
   } catch (err) { res.status(500).json({ message: err.message }) }
 }
 
-// ── Booking Summary Report ────────────────────────────────
-exports.bookingSummary = async (req, res) => {
+// ── Car List Report ────────────────────────────────────
+export const carList = async (req, res) => {
   try {
     const { format } = req.query
-    const bookings = await Booking.find()
-      .populate('guestId', 'fullName')
-      .populate('roomId', 'roomNumber')
-      .sort({ checkInDate: -1 })
+    const cars = await Car.find().sort({ createdAt: -1 })
 
-    const rows = bookings.map((b) => [
-      b.bookingNumber,
-      b.guestId?.fullName || '',
-      b.roomId?.roomNumber || '',
-      new Date(b.checkInDate).toLocaleDateString('en-GB'),
-      new Date(b.checkOutDate).toLocaleDateString('en-GB'),
-      b.totalAmount,
-      b.status,
-    ])
+    const rows = await Promise.all(cars.map(async (c) => {
+      const records = await ServicePackage.find({ carId: c._id })
+      const recordIds = records.map(r => r._id)
+      const payments = await Payment.find({ recordId: { $in: recordIds } })
+      const totalSpent = payments.reduce((s, p) => s + p.amountPaid, 0)
+      return [
+        c.plateNumber, c.carType, c.carSize, c.driverName, c.phoneNumber,
+        records.length, totalSpent,
+      ]
+    }))
 
-    const columns = ['Booking No.', 'Guest', 'Room', 'Check-in', 'Check-out', 'Amount', 'Status']
+    const columns = ['Plate', 'Type', 'Size', 'Driver', 'Phone', 'Washes', 'Total Spent']
 
     if (format === 'xlsx') {
-      const buffer = await generateReportXLSX('Booking Summary', columns, rows)
+      const buffer = await generateReportXLSX('Car List', columns, rows)
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      res.setHeader('Content-Disposition', 'attachment; filename=booking-summary.xlsx')
+      res.setHeader('Content-Disposition', 'attachment; filename=car-list.xlsx')
       return res.send(buffer)
     }
-
     if (format === 'pdf') {
-      const total = bookings.reduce((s, b) => s + b.totalAmount, 0)
-      const totals = [{ label: 'Total Amount', value: `${total.toLocaleString()} Rwf` }]
-      const buffer = await generateReportPDF('Booking Summary', columns, rows, totals, req.user)
+      const buffer = await generateReportPDF('Car List', columns, rows, null, req.user)
       res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', 'attachment; filename=booking-summary.pdf')
+      res.setHeader('Content-Disposition', 'attachment; filename=car-list.pdf')
       return res.send(buffer)
     }
 
-    res.json({ data: bookings.map((b) => ({
-      bookingNumber: b.bookingNumber,
-      guest: b.guestId?.fullName || '',
-      room: b.roomId?.roomNumber || '',
-      checkInDate: b.checkInDate,
-      checkOutDate: b.checkOutDate,
-      amount: b.totalAmount,
-      status: b.status,
+    res.json({ data: rows.map((r) => ({
+      plateNumber: r[0], carType: r[1], carSize: r[2],
+      driverName: r[3], phoneNumber: r[4], totalWashes: r[5], totalSpent: r[6],
     })) })
   } catch (err) { res.status(500).json({ message: err.message }) }
 }
 
-// ── Payment Ledger Report ─────────────────────────────────
-exports.paymentLedger = async (req, res) => {
+// ── Payment Summary Report ─────────────────────────────
+export const paymentSummary = async (req, res) => {
   try {
     const { format } = req.query
     const payments = await Payment.find()
-      .populate({
-        path: 'bookingId',
-        select: 'bookingNumber',
-        populate: { path: 'guestId', select: 'fullName' },
-      })
-      .sort({ paymentDate: -1 })
+      .populate({ path: 'recordId', populate: [
+        { path: 'carId', select: 'plateNumber driverName' },
+        { path: 'packageId', select: 'packageName packagePrice' },
+      ]}).sort({ paymentDate: -1 })
 
     const rows = payments.map((p) => [
-      p.paymentNumber,
-      p.bookingId?.bookingNumber || '',
-      p.bookingId?.guestId?.fullName || '',
+      p.paymentNumber, p.recordId?.recordNumber || '',
+      p.recordId?.carId?.plateNumber || '', p.recordId?.packageId?.packageName || '',
       p.amountPaid,
-      p.paymentMethod,
       new Date(p.paymentDate).toLocaleDateString('en-GB'),
     ])
-
-    const columns = ['Payment No.', 'Booking', 'Guest', 'Amount', 'Method', 'Date']
+    const columns = ['Payment No.', 'Record', 'Plate', 'Package', 'Amount', 'Date']
 
     if (format === 'xlsx') {
-      const buffer = await generateReportXLSX('Payment Ledger', columns, rows)
+      const buffer = await generateReportXLSX('Payment Summary', columns, rows)
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      res.setHeader('Content-Disposition', 'attachment; filename=payment-ledger.xlsx')
+      res.setHeader('Content-Disposition', 'attachment; filename=payment-summary.xlsx')
       return res.send(buffer)
     }
-
     if (format === 'pdf') {
-      const total = payments.reduce((s, p) => s + p.amountPaid, 0)
-      const totals = [{ label: 'Total Payments', value: `${total.toLocaleString()} Rwf` }]
-      const buffer = await generateReportPDF('Payment Ledger', columns, rows, totals, req.user)
+      const buffer = await generateReportPDF('Payment Summary', columns, rows, null, req.user)
       res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', 'attachment; filename=payment-ledger.pdf')
+      res.setHeader('Content-Disposition', 'attachment; filename=payment-summary.pdf')
       return res.send(buffer)
     }
 
-    res.json({ data: payments.map((p) => ({
-      paymentNumber: p.paymentNumber,
-      booking: p.bookingId?.bookingNumber || '',
-      guest: p.bookingId?.guestId?.fullName || '',
-      amount: p.amountPaid,
-      paymentMethod: p.paymentMethod,
-      paymentDate: p.paymentDate,
+    res.json({ data: rows.map((r) => ({
+      paymentNumber: r[0], recordNumber: r[1],
+      plateNumber: r[2], packageName: r[3],
+      amount: r[4], paymentDate: r[5],
     })) })
   } catch (err) { res.status(500).json({ message: err.message }) }
 }
 
-// ── Guest Statement (with PDF invoice) ────────────────────
-exports.guestStatement = async (req, res) => {
-  try {
-    const { guestId } = req.query
-    if (!guestId) return res.status(400).json({ message: 'guestId is required' })
-
-    const guest = await Guest.findById(guestId)
-    if (!guest) return res.status(404).json({ message: 'Guest not found' })
-
-    const bookings = await Booking.find({ guestId })
-      .populate('roomId', 'roomNumber roomType pricePerNight')
-      .sort({ checkInDate: -1 })
-
-    const rows = await Promise.all(bookings.map(async (b) => {
-      const payments = await Payment.find({ bookingId: b._id })
-      const totalPaid = payments.reduce((s, p) => s + p.amountPaid, 0)
-      return {
-        bookingNumber: b.bookingNumber,
-        room: b.roomId?.roomNumber || '',
-        checkInDate: b.checkInDate,
-        checkOutDate: b.checkOutDate,
-        amount: b.totalAmount,
-        paid: totalPaid,
-        balance: b.totalAmount - totalPaid,
-        status: b.status,
-      }
-    }))
-
-    // Check if PDF invoice is requested for a specific booking
-    const { bookingId, format } = req.query
-    if (format === 'pdf' && bookingId) {
-      const booking = await Booking.findById(bookingId)
-        .populate('roomId', 'roomNumber roomType pricePerNight')
-
-      if (!booking) return res.status(404).json({ message: 'Booking not found' })
-
-      const payments = await Payment.find({ bookingId: booking._id })
-      const buffer = await generateInvoicePDF(booking, guest, booking.roomId, payments, req.user)
-
-      res.setHeader('Content-Type', 'application/pdf')
-      res.setHeader('Content-Disposition', `attachment; filename=invoice-${booking.bookingNumber}.pdf`)
-      return res.send(buffer)
-    }
-
-    if (format === 'xlsx') {
-      const columns = ['Booking No.', 'Room', 'Check-in', 'Check-out', 'Amount', 'Paid', 'Balance']
-      const data = rows.map((r) => [
-        r.bookingNumber, r.room,
-        new Date(r.checkInDate).toLocaleDateString('en-GB'),
-        new Date(r.checkOutDate).toLocaleDateString('en-GB'),
-        r.amount, r.paid, r.balance,
-      ])
-      const buffer = await generateReportXLSX(`Statement - ${guest.fullName}`, columns, data)
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      res.setHeader('Content-Disposition', `attachment; filename=statement-${guest.fullName.replace(/\s+/g, '-')}.xlsx`)
-      return res.send(buffer)
-    }
-
-    res.json({ data: rows })
-  } catch (err) { res.status(500).json({ message: err.message }) }
-}
-
-// ── Daily Revenue Report ─────────────────────────────────
-exports.dailyRevenue = async (req, res) => {
+// ── Daily Revenue Report ───────────────────────────────
+export const dailyRevenue = async (req, res) => {
   try {
     const { date, format } = req.query
     const targetDate = date ? new Date(date) : new Date()
-    const start = new Date(targetDate)
-    start.setHours(0, 0, 0, 0)
-    const end = new Date(targetDate)
-    end.setHours(23, 59, 59, 999)
+    const start = new Date(targetDate); start.setHours(0, 0, 0, 0)
+    const end = new Date(targetDate); end.setHours(23, 59, 59, 999)
 
     const payments = await Payment.find({ paymentDate: { $gte: start, $lte: end } })
-      .populate({
-        path: 'bookingId',
-        select: 'bookingNumber',
-        populate: { path: 'guestId', select: 'fullName' },
-      })
+      .populate({ path: 'recordId', populate: { path: 'carId', select: 'plateNumber' } })
       .sort({ paymentDate: -1 })
 
     const rows = payments.map((p) => [
-      p.bookingId?.bookingNumber || '',
-      p.bookingId?.guestId?.fullName || '',
-      p.bookingId?.bookingNumber || '',
+      p.paymentNumber, p.recordId?.recordNumber || '',
+      p.recordId?.carId?.plateNumber || '',
       p.amountPaid,
-      p.paymentMethod,
     ])
-
-    const columns = ['Booking No.', 'Guest', 'Room', 'Amount', 'Payment Method']
+    const columns = ['Payment No.', 'Record', 'Plate', 'Amount']
     const total = payments.reduce((s, p) => s + p.amountPaid, 0)
 
     if (format === 'xlsx') {
-      const allRows = [...rows, [], ['TOTAL', '', '', total, '']]
+      const allRows = [...rows, [], ['TOTAL', '', '', total]]
       const buffer = await generateReportXLSX(`Daily Revenue - ${targetDate.toLocaleDateString('en-GB')}`, columns, allRows)
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       res.setHeader('Content-Disposition', `attachment; filename=daily-revenue-${targetDate.toISOString().split('T')[0]}.xlsx`)
       return res.send(buffer)
     }
-
     if (format === 'pdf') {
       const totals = [{ label: 'Total Revenue', value: `${total.toLocaleString()} Rwf` }]
       const buffer = await generateReportPDF('Daily Revenue Report', columns, rows, totals, req.user)
@@ -306,11 +155,30 @@ exports.dailyRevenue = async (req, res) => {
     }
 
     res.json({ data: payments.map((p) => ({
-      bookingNumber: p.bookingId?.bookingNumber || '',
-      guest: p.bookingId?.guestId?.fullName || '',
-      room: '',
+      paymentNumber: p.paymentNumber, recordNumber: p.recordId?.recordNumber || '',
+      plateNumber: p.recordId?.carId?.plateNumber || '',
       amount: p.amountPaid,
-      paymentMethod: p.paymentMethod,
     })) })
   } catch (err) { res.status(500).json({ message: err.message }) }
 }
+
+// ── Receipt PDF ────────────────────────────────────────
+export const generateReceipt = async (req, res) => {
+  try {
+    const { recordId } = req.query
+    if (!recordId) return res.status(400).json({ message: 'recordId is required' })
+
+    const record = await ServicePackage.findById(recordId)
+      .populate('carId').populate('packageId')
+    if (!record) return res.status(404).json({ message: 'Service package not found' })
+
+    const payments = await Payment.find({ recordId: record._id })
+    const buffer = await generateInvoicePDF(record, payments, req.user)
+
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename=receipt-${record.recordNumber}.pdf`)
+    return res.send(buffer)
+  } catch (err) { res.status(500).json({ message: err.message }) }
+}
+
+// ── Invoice PDF (reuses pdfGenerator) ──────────────────

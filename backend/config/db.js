@@ -1,7 +1,7 @@
-const mongoose = require('mongoose')
-const cfg = require('./config')
+import mongoose from 'mongoose'
+import cfg from './config.js'
 
-async function connectDB() {
+export default async function connectDB() {
   try {
     await mongoose.connect(cfg.mongoUri)
     console.log('MongoDB connected:', cfg.mongoUri)
@@ -10,5 +10,3 @@ async function connectDB() {
     process.exit(1)
   }
 }
-
-module.exports = connectDB

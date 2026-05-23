@@ -1,10 +1,9 @@
-const ExcelJS = require('exceljs')
+import ExcelJS from 'exceljs'
 
-async function generateReportXLSX(title, columns, rows) {
+export async function generateReportXLSX(title, columns, rows) {
   const workbook = new ExcelJS.Workbook()
   const sheet = workbook.addWorksheet(title.slice(0, 31))
 
-  // Title row
   sheet.mergeCells(1, 1, 1, columns.length)
   const titleCell = sheet.getCell(1, 1)
   titleCell.value = title
@@ -13,7 +12,6 @@ async function generateReportXLSX(title, columns, rows) {
 
   sheet.addRow([])
 
-  // Header row
   const headerRow = sheet.addRow(columns.map((c) => c.label || c))
   headerRow.eachCell((cell) => {
     cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
@@ -25,7 +23,6 @@ async function generateReportXLSX(title, columns, rows) {
     }
   })
 
-  // Data rows
   rows.forEach((row, ri) => {
     const dataRow = sheet.addRow(row)
     dataRow.eachCell((cell, ci) => {
@@ -40,7 +37,6 @@ async function generateReportXLSX(title, columns, rows) {
     })
   })
 
-  // Auto-width
   columns.forEach((_, i) => {
     const maxLen = Math.max(
       ...rows.map((r) => String(r[i] || '').length),
@@ -52,5 +48,3 @@ async function generateReportXLSX(title, columns, rows) {
   const buffer = await workbook.xlsx.writeBuffer()
   return buffer
 }
-
-module.exports = { generateReportXLSX }

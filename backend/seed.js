@@ -1,96 +1,108 @@
-const mongoose = require('mongoose')
-const bcrypt = require('bcryptjs')
-const cfg = require('./config/config')
-
-const User = require('./models/User')
-const Room = require('./models/Room')
-const Guest = require('./models/Guest')
-const Booking = require('./models/Booking')
-const Payment = require('./models/Payment')
+import 'dotenv/config'
+import mongoose from 'mongoose'
+import cfg from './config/config.js'
+import Package from './models/Package.js'
+import Car from './models/Car.js'
+import ServicePackage from './models/ServicePackage.js'
+import Payment from './models/Payment.js'
+import User from './models/User.js'
 
 async function seed() {
-  await mongoose.connect(cfg.mongoUri)
-  console.log('Connected to MongoDB')
+  try {
+    await mongoose.connect(cfg.mongoUri)
+    console.log('Connected to MongoDB')
 
-  // Clear existing data
-  await Promise.all([
-    User.deleteMany({}),
-    Room.deleteMany({}),
-    Guest.deleteMany({}),
-    Booking.deleteMany({}),
-    Payment.deleteMany({}),
-  ])
-  console.log('Cleared existing data')
+    await Promise.all([
+      User.deleteMany({}),
+      Package.deleteMany({}),
+      Car.deleteMany({}),
+      ServicePackage.deleteMany({}),
+      Payment.deleteMany({}),
+    ])
+    console.log('Cleared existing data')
 
-  // ── Users ──────────────────────────────────────────────
-  const admin = await User.create({
-    username: 'admin',
-    password: 'admin123',
-    securityQuestion: 'What was the name of your first pet?',
-    securityAnswer: 'Rex',
-  })
-  console.log('User created: admin / admin123')
+    // ── Admin user ──────────────────────────────────
+    await User.create({
+      username: 'admin',
+      password: 'admin123',
+      securityQuestion: 'What is your favorite color?',
+      securityAnswer: 'blue',
+    })
+    console.log('Admin user: admin / admin123')
 
-  // ── Rooms ──────────────────────────────────────────────
-  const roomData = [
-    { roomNumber: '101', roomType: 'Single',   pricePerNight: 30000,  status: 'Booked' },
-    { roomNumber: '102', roomType: 'Single',   pricePerNight: 30000,  status: 'Available' },
-    { roomNumber: '105', roomType: 'Double',   pricePerNight: 50000,  status: 'Booked' },
-    { roomNumber: '106', roomType: 'Double',   pricePerNight: 50000,  status: 'Maintenance' },
-    { roomNumber: '202', roomType: 'Double',   pricePerNight: 55000,  status: 'Booked' },
-    { roomNumber: '205', roomType: 'Suite',    pricePerNight: 80000,  status: 'Booked' },
-    { roomNumber: '303', roomType: 'Suite',    pricePerNight: 100000, status: 'Available' },
-    { roomNumber: '310', roomType: 'Deluxe',   pricePerNight: 90000,  status: 'Available' },
-    { roomNumber: '408', roomType: 'Deluxe',   pricePerNight: 120000, status: 'Available' },
-  ]
-  const rooms = await Room.insertMany(roomData)
-  console.log(`Seeded ${rooms.length} rooms`)
+    // ── Wash packages ───────────────────────────────
+    const packageData = [
+      { packageName: 'Basic Wash',     packageDescription: 'Exterior hand wash, wheel cleaning, window wipe',            packagePrice: 5000 },
+      { packageName: 'Full Wash',      packageDescription: 'Exterior wash + interior vacuum + dashboard polish',        packagePrice: 10000 },
+      { packageName: 'Premium Wash',   packageDescription: 'Full Wash + wax coating + tire shine + air freshener',      packagePrice: 15000 },
+      { packageName: 'Deluxe Detail',  packageDescription: 'Premium Wash + engine bay clean + upholstery shampoo',      packagePrice: 25000 },
+      { packageName: 'Express Wash',   packageDescription: 'Quick exterior rinse and dry',                               packagePrice: 3000 },
+    ]
+    const packages = []
+    for (const d of packageData) {
+      packages.push(await Package.create(d))
+    }
+    console.log(`${packages.length} packages created`)
 
-  // ── Guests ─────────────────────────────────────────────
-  const guestData = [
-    { fullName: 'John Doe',       phone: '+250788100100', email: 'john.doe@email.com',     idNumber: 'ID-1001' },
-    { fullName: 'Jane Smith',     phone: '+250788200200', email: 'jane.smith@email.com',   idNumber: 'ID-1002' },
-    { fullName: 'Bob Johnson',    phone: '+250788300300', email: 'bob.j@email.com',        idNumber: 'ID-1003' },
-    { fullName: 'Alice Williams', phone: '+250788400400', email: 'alice.w@email.com',      idNumber: 'ID-1004' },
-    { fullName: 'Charlie Brown',  phone: '+250788500500', email: 'charlie.b@email.com',    idNumber: 'ID-1005' },
-    { fullName: 'Diana Prince',   phone: '+250788600600', email: 'diana.p@email.com',      idNumber: 'ID-1006' },
-  ]
-  const guests = await Guest.insertMany(guestData)
-  console.log(`Seeded ${guests.length} guests`)
+    // ── Cars ────────────────────────────────────────
+    const carData = [
+      { plateNumber: 'RAB-101-A', carType: 'Sedan',    carSize: 'Medium', driverName: 'Jean Pierre',    phoneNumber: '0788000101' },
+      { plateNumber: 'RAB-202-B', carType: 'SUV',      carSize: 'Large',  driverName: 'Marie Uwimana',  phoneNumber: '0788000202' },
+      { plateNumber: 'RAB-303-C', carType: 'Hatchback', carSize: 'Small',  driverName: 'Patrick Mugabo', phoneNumber: '0788000303' },
+      { plateNumber: 'RAB-404-D', carType: 'Pickup',   carSize: 'Large',  driverName: 'Alice Habimana', phoneNumber: '0788000404' },
+      { plateNumber: 'RAB-505-E', carType: 'Sedan',    carSize: 'Medium', driverName: 'David Niyo',     phoneNumber: '0788000505' },
+      { plateNumber: 'RAB-606-F', carType: 'SUV',      carSize: 'Large',  driverName: 'Grace Uwase',    phoneNumber: '0788000606' },
+      { plateNumber: 'RAB-707-G', carType: 'Minibus',  carSize: 'Large',  driverName: 'James Nshimi',   phoneNumber: '0788000707' },
+      { plateNumber: 'RAB-808-H', carType: 'Hatchback', carSize: 'Small',  driverName: 'Sarah Ingabire', phoneNumber: '0788000808' },
+    ]
+    const cars = []
+    for (const d of carData) {
+      cars.push(await Car.create(d))
+    }
+    console.log(`${cars.length} cars created`)
 
-  // ── Bookings ───────────────────────────────────────────
-  const bookingData = [
-    { bookingNumber: 'BK-001', guestId: guests[0]._id, roomId: rooms[0]._id,  checkInDate: new Date('2026-05-10'), checkOutDate: new Date('2026-05-12'), totalAmount: 60000,  status: 'Checked-out' },
-    { bookingNumber: 'BK-002', guestId: guests[1]._id, roomId: rooms[7]._id,  checkInDate: new Date('2026-05-11'), checkOutDate: new Date('2026-05-13'), totalAmount: 180000, status: 'Checked-out' },
-    { bookingNumber: 'BK-003', guestId: guests[2]._id, roomId: rooms[5]._id,  checkInDate: new Date('2026-05-15'), checkOutDate: new Date('2026-05-18'), totalAmount: 240000, status: 'Checked-in' },
-    { bookingNumber: 'BK-004', guestId: guests[3]._id, roomId: rooms[2]._id,  checkInDate: new Date('2026-05-14'), checkOutDate: new Date('2026-05-17'), totalAmount: 150000, status: 'Checked-in' },
-    { bookingNumber: 'BK-005', guestId: guests[0]._id, roomId: rooms[4]._id,  checkInDate: new Date('2026-05-20'), checkOutDate: new Date('2026-05-22'), totalAmount: 110000, status: 'Confirmed' },
-    { bookingNumber: 'BK-006', guestId: guests[4]._id, roomId: rooms[6]._id,  checkInDate: new Date('2026-05-16'), checkOutDate: new Date('2026-05-20'), totalAmount: 400000, status: 'Checked-in' },
-    { bookingNumber: 'BK-007', guestId: guests[5]._id, roomId: rooms[3]._id,  checkInDate: new Date('2026-05-25'), checkOutDate: new Date('2026-05-26'), totalAmount: 50000,  status: 'Confirmed' },
-    { bookingNumber: 'BK-008', guestId: guests[3]._id, roomId: rooms[8]._id,  checkInDate: new Date('2026-05-28'), checkOutDate: new Date('2026-05-30'), totalAmount: 240000, status: 'Confirmed' },
-  ]
-  const bookings = await Booking.insertMany(bookingData)
-  console.log(`Seeded ${bookings.length} bookings`)
+    // ── Service packages (wash records) ─────────────
+    const today = new Date()
+    const recordsData = [
+      { serviceDate: new Date(today.getTime() - 86400000 * 5), carId: cars[0]._id, packageId: packages[0]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 4), carId: cars[1]._id, packageId: packages[1]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 3), carId: cars[2]._id, packageId: packages[2]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 2), carId: cars[3]._id, packageId: packages[3]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 1), carId: cars[4]._id, packageId: packages[0]._id },
+      { serviceDate: today,                                      carId: cars[5]._id, packageId: packages[1]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 7), carId: cars[6]._id, packageId: packages[2]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 10), carId: cars[7]._id, packageId: packages[4]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 6), carId: cars[0]._id, packageId: packages[1]._id },
+      { serviceDate: new Date(today.getTime() - 86400000 * 8), carId: cars[2]._id, packageId: packages[3]._id },
+    ]
+    const records = []
+    for (const d of recordsData) {
+      records.push(await ServicePackage.create(d))
+    }
+    console.log(`${records.length} wash records created`)
 
-  // ── Payments ───────────────────────────────────────────
-  const paymentData = [
-    { paymentNumber: 'PAY-001', bookingId: bookings[0]._id, amountPaid: 60000,  paymentMethod: 'Cash',        paymentDate: new Date('2026-05-12') },
-    { paymentNumber: 'PAY-002', bookingId: bookings[1]._id, amountPaid: 180000, paymentMethod: 'Card',        paymentDate: new Date('2026-05-13') },
-    { paymentNumber: 'PAY-003', bookingId: bookings[2]._id, amountPaid: 100000, paymentMethod: 'Mobile Money', paymentDate: new Date('2026-05-15') },
-    { paymentNumber: 'PAY-004', bookingId: bookings[3]._id, amountPaid: 150000, paymentMethod: 'Cash',        paymentDate: new Date('2026-05-14') },
-    { paymentNumber: 'PAY-005', bookingId: bookings[2]._id, amountPaid: 140000, paymentMethod: 'Card',        paymentDate: new Date('2026-05-17') },
-    { paymentNumber: 'PAY-006', bookingId: bookings[5]._id, amountPaid: 200000, paymentMethod: 'Mobile Money', paymentDate: new Date('2026-05-16') },
-    { paymentNumber: 'PAY-007', bookingId: bookings[5]._id, amountPaid: 200000, paymentMethod: 'Cash',        paymentDate: new Date('2026-05-19') },
-    { paymentNumber: 'PAY-008', bookingId: bookings[1]._id, amountPaid: 180000, paymentMethod: 'Mobile Money', paymentDate: new Date('2026-05-13') },
-  ]
-  await Payment.insertMany(paymentData)
-  console.log(`Seeded ${paymentData.length} payments`)
+    // ── Payments ────────────────────────────────────
+    const fetched = await ServicePackage.find().populate('packageId')
+    const paymentsData = fetched.map((r) => ({
+      recordId: r._id,
+      amountPaid: r.packageId?.packagePrice || 0,
+      paymentDate: r.serviceDate,
+    }))
+    const payments = []
+    for (const d of paymentsData) {
+      payments.push(await Payment.create(d))
+    }
+    console.log(`${payments.length} payments created`)
 
-  console.log('\nSeed complete! Login with: admin / admin123')
-  await mongoose.disconnect()
+    console.log('\n✅ Seed completed!')
+    console.log('Login: admin / admin123')
+
+    await mongoose.disconnect()
+    process.exit(0)
+  } catch (err) {
+    console.error('Seed failed:', err)
+    process.exit(1)
+  }
 }
 
-seed().catch((err) => {
-  console.error('Seed error:', err)
-  process.exit(1)
-})
+seed()

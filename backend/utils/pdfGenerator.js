@@ -1,109 +1,102 @@
-const PDFDocument = require('pdfkit')
+import PDFDocument from 'pdfkit'
 
-function generateInvoicePDF(booking, guest, room, payments, user) {
+export function generateInvoicePDF(record, payments, user) {
+  const car = record.carId || {}
+  const pkg = record.packageId || {}
   const doc = new PDFDocument({ margin: 40, size: 'A4' })
   const buffers = []
 
   doc.on('data', (chunk) => buffers.push(chunk))
 
-  doc.fontSize(18).font('Helvetica-Bold').text('INVOICE', { align: 'right' })
+  doc.fontSize(18).font('Helvetica-Bold').text('RECEIPT', { align: 'right' })
   doc.moveDown(0.3)
   doc.fontSize(10).font('Helvetica').fillColor('#666')
-    .text(`Invoice No: INV-${booking.bookingNumber}`, { align: 'right' })
+    .text(`Receipt No: ${record.recordNumber}`, { align: 'right' })
     .text(`Date: ${new Date().toLocaleDateString('en-GB')}`, { align: 'right' })
 
   doc.moveDown(1.5)
 
-  // Hotel info
-  doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text('HOTEL MANAGEMENT SYSTEM')
+  doc.fontSize(14).font('Helvetica-Bold').fillColor('#000').text('SMARTPARK CAR WASH')
   doc.fontSize(10).font('Helvetica').fillColor('#444')
-    .text('123 Hotel Street, City')
-    .text('Phone: +250 788 000 000 | Email: info@hotel.com')
+    .text('Rubavu District, Western Province')
+    .text('Phone: +250 788 000 000 | Email: info@smartpark.rw')
 
   doc.moveDown(1)
-
-  // Horizontal rule
   doc.moveTo(40, doc.y).lineTo(550, doc.y).strokeColor('#ddd').stroke()
+  doc.moveDown(1)
+
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text('CAR & DRIVER')
+  doc.fontSize(10).font('Helvetica').fillColor('#444')
+    .text(`Plate Number: ${car.plateNumber || ''}`)
+    .text(`Car Type: ${car.carType || ''} (${car.carSize || ''})`)
+    .text(`Driver: ${car.driverName || ''}`)
+    .text(`Phone: ${car.phoneNumber || ''}`)
 
   doc.moveDown(1)
 
-  // Bill to
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text('BILL TO')
+  doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text('WASH DETAILS')
   doc.fontSize(10).font('Helvetica').fillColor('#444')
-    .text(`Guest: ${guest.fullName}`)
-    .text(`Phone: ${guest.phone}`)
-    .text(`Email: ${guest.email}`)
-    .text(`ID: ${guest.idNumber}`)
-
-  doc.moveDown(1)
-
-  // Booking details
-  doc.fontSize(11).font('Helvetica-Bold').fillColor('#000').text('BOOKING DETAILS')
-  doc.fontSize(10).font('Helvetica').fillColor('#444')
-    .text(`Booking No: ${booking.bookingNumber}`)
-    .text(`Room: ${room.roomNumber} (${room.roomType})`)
-    .text(`Check-in: ${new Date(booking.checkInDate).toLocaleDateString('en-GB')}`)
-    .text(`Check-out: ${new Date(booking.checkOutDate).toLocaleDateString('en-GB')}`)
-    .text(`Nights: ${booking.numberOfNights}`)
+    .text(`Record No: ${record.recordNumber}`)
+    .text(`Package: ${pkg.packageName || ''}`)
+    .text(`Wash Date: ${new Date(record.serviceDate).toLocaleDateString('en-GB')}`)
 
   doc.moveDown(1.5)
 
-  // Table
   const tableTop = doc.y
-  const col1 = 40, col2 = 250, col3 = 380, col4 = 480
+  const col1 = 40, col2 = 300, col3 = 480
 
   doc.fontSize(10).font('Helvetica-Bold').fillColor('#fff')
   doc.roundedRect(col1 - 4, tableTop - 6, 514, 22, 4).fill('#2563eb')
   doc.fillColor('#fff')
     .text('Description', col1 + 4, tableTop)
-    .text('Qty', col2, tableTop, { width: 80, align: 'center' })
-    .text('Unit Price', col3, tableTop, { width: 80, align: 'center' })
-    .text('Amount', col4, tableTop, { width: 80, align: 'right' })
+    .text('Price', col2, tableTop, { width: 80, align: 'center' })
+    .text('Paid', col3, tableTop, { width: 80, align: 'right' })
 
   doc.fillColor('#000').font('Helvetica')
   let y = tableTop + 28
 
-  doc.text(`Room ${room.roomNumber} - ${room.roomType}`, col1 + 4, y)
-  doc.text(String(booking.numberOfNights), col2, y, { width: 80, align: 'center' })
-  doc.text(`${room.pricePerNight.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'center' })
-  doc.text(`${booking.totalAmount.toLocaleString()} Rwf`, col4, y, { width: 80, align: 'right' })
+  payments = payments || []
+  const packagePrice = pkg.packagePrice || 0
+  const totalPaid = payments.reduce((s, p) => s + p.amountPaid, 0)
+  const balance = packagePrice - totalPaid
+
+  doc.text(pkg.packageName || 'Car Wash', col1 + 4, y)
+  doc.text(`${packagePrice.toLocaleString()} Rwf`, col2, y, { width: 80, align: 'center' })
+  doc.text(`${totalPaid.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'right' })
 
   y += 22
 
-  // Payments
-  let totalPaid = 0
-  if (payments && payments.length > 0) {
-    payments.forEach((p) => {
-      doc.text(`Payment (${p.paymentMethod})`, col1 + 4, y)
-      doc.text('1', col2, y, { width: 80, align: 'center' })
-      doc.text(`${p.amountPaid.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'center' })
-      doc.text(`${p.amountPaid.toLocaleString()} Rwf`, col4, y, { width: 80, align: 'right' })
-      totalPaid += p.amountPaid
-      y += 20
+  if (payments.length > 0) {
+    doc.moveTo(col1, y).lineTo(col1 + 510, y).strokeColor('#eee').stroke()
+    y += 12
+    doc.fontSize(9).font('Helvetica-Bold').fillColor('#444').text('Payment History:', col1 + 4, y)
+    y += 16
+
+    payments.forEach((p, i) => {
+      doc.fontSize(9).font('Helvetica').fillColor('#444')
+      doc.text(`${i + 1}. ${new Date(p.paymentDate).toLocaleDateString('en-GB')}`, col1 + 4, y)
+      doc.text(`${p.amountPaid.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'right' })
+      y += 14
     })
   }
 
-  // Totals
   y += 10
   doc.moveTo(col1, y).lineTo(col1 + 510, y).strokeColor('#ddd').stroke()
   y += 14
 
-  const balance = booking.totalAmount - totalPaid
-
-  doc.font('Helvetica-Bold')
-  doc.text('Total Amount:', col1 + 4, y)
-  doc.text(`${booking.totalAmount.toLocaleString()} Rwf`, col4, y, { width: 80, align: 'right' })
-  y += 18
+  doc.fontSize(10).font('Helvetica-Bold')
+  doc.text('Package Price:', col1 + 4, y)
+  doc.text(`${packagePrice.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'right' })
+  y += 16
   doc.text('Total Paid:', col1 + 4, y)
-  doc.text(`${totalPaid.toLocaleString()} Rwf`, col4, y, { width: 80, align: 'right' })
-  y += 18
+  doc.text(`${totalPaid.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'right' })
+  y += 16
   doc.fontSize(12).fillColor(balance > 0 ? '#dc2626' : '#16a34a')
   doc.text('Balance:', col1 + 4, y)
-  doc.text(`${balance.toLocaleString()} Rwf`, col4, y, { width: 80, align: 'right' })
+  doc.text(`${balance.toLocaleString()} Rwf`, col3, y, { width: 80, align: 'right' })
 
   doc.moveDown(3)
 
-  // Signature
   doc.fontSize(10).font('Helvetica').fillColor('#444')
   doc.text(`Received by: ___________________________`, 40, doc.y)
   doc.moveDown(0.5)
@@ -117,8 +110,7 @@ function generateInvoicePDF(booking, guest, room, payments, user) {
   })
 }
 
-// ── Generic report PDF ────────────────────────────────────
-function generateReportPDF(title, columns, rows, totals, user) {
+export function generateReportPDF(title, columns, rows, totals, user) {
   const doc = new PDFDocument({ margin: 40, size: 'A4' })
   const buffers = []
 
@@ -181,5 +173,3 @@ function generateReportPDF(title, columns, rows, totals, user) {
     doc.on('end', () => resolve(Buffer.concat(buffers)))
   })
 }
-
-module.exports = { generateInvoicePDF, generateReportPDF }

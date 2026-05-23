@@ -1,55 +1,37 @@
-const Payment = require('../models/Payment')
+import Payment from '../models/Payment.js'
 
-exports.getAll = async (req, res) => {
+const pop = [{ path: 'recordId', populate: [
+  { path: 'carId', select: 'plateNumber carType driverName' },
+  { path: 'packageId', select: 'packageNumber packageName packagePrice' },
+]}]
+
+export const getAll = async (req, res) => {
   try {
-    const payments = await Payment.find()
-      .populate({
-        path: 'bookingId',
-        populate: { path: 'guestId', select: 'fullName' },
-      })
-      .sort({ paymentDate: -1 })
-    res.json({ data: payments })
-  } catch (err) {
-    res.status(500).json({ message: err.message })
-  }
+    const items = await Payment.find().populate(pop).sort({ paymentDate: -1 })
+    res.json({ data: items })
+  } catch (err) { res.status(500).json({ message: err.message }) }
 }
 
-exports.create = async (req, res) => {
+export const create = async (req, res) => {
   try {
-    const payment = await Payment.create(req.body)
-
-    const populated = await Payment.findById(payment._id)
-      .populate({
-        path: 'bookingId',
-        populate: { path: 'guestId', select: 'fullName' },
-      })
-
+    const item = await Payment.create(req.body)
+    const populated = await Payment.findById(item._id).populate(pop)
     res.status(201).json({ data: populated })
-  } catch (err) {
-    res.status(400).json({ message: err.message })
-  }
+  } catch (err) { res.status(400).json({ message: err.message }) }
 }
 
-exports.update = async (req, res) => {
+export const update = async (req, res) => {
   try {
-    const payment = await Payment.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true })
-      .populate({
-        path: 'bookingId',
-        populate: { path: 'guestId', select: 'fullName' },
-      })
-    if (!payment) return res.status(404).json({ message: 'Payment not found' })
-    res.json({ data: payment })
-  } catch (err) {
-    res.status(400).json({ message: err.message })
-  }
+    const item = await Payment.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }).populate(pop)
+    if (!item) return res.status(404).json({ message: 'Payment not found' })
+    res.json({ data: item })
+  } catch (err) { res.status(400).json({ message: err.message }) }
 }
 
-exports.remove = async (req, res) => {
+export const remove = async (req, res) => {
   try {
-    const payment = await Payment.findByIdAndDelete(req.params.id)
-    if (!payment) return res.status(404).json({ message: 'Payment not found' })
+    const item = await Payment.findByIdAndDelete(req.params.id)
+    if (!item) return res.status(404).json({ message: 'Payment not found' })
     res.json({ message: 'Payment deleted' })
-  } catch (err) {
-    res.status(500).json({ message: err.message })
-  }
+  } catch (err) { res.status(500).json({ message: err.message }) }
 }
